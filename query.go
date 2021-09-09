@@ -370,17 +370,23 @@ func toTime(src interface{}) (time.Time, error) {
  * *****************************************************************/
 
 /*
-Scan() takes a list of pointers and then updates them to reflect he current row's data.
+Scan takes a list of pointers and then updates them to reflect the current row's data.
 
 Note that only the following data types are used, and they
 are a subset of the types JSON uses:
-	string, for JSON strings
-	float64, for JSON numbers
-	int64, as a convenient extension
-	nil for JSON null
+	time: conversion to time occurs depending on the type of source
+		string:
+			- parse with layout = "2006-01-02 15:04:05"
+			- parse as time.RFC3339
+		float64, int64: time.Unix(src, 0)
+	bool: for boolean
+	float64: for JSON numbers,
+	int: as extension of float64 or after conversion from a source string,
+	int64: as an extension of float64 or after conversion from a source string,
+	string: for JSON strings,
+	nil: for JSON null
 
-booleans, JSON arrays, and JSON objects are not supported,
-since sqlite does not support them.
+JSON arrays, and JSON objects are not supported since sqlite does not support them.
 */
 func (qr *QueryResult) Scan(dest ...interface{}) error {
 	trace("%s: Scan() called for %d vars", qr.conn.ID, len(dest))
@@ -422,6 +428,19 @@ func (qr *QueryResult) Scan(dest ...interface{}) error {
 					return err
 				}
 				*d.(*int) = i
+			default:
+				return fmt.Errorf("invalid int col:%d type:%T val:%v", n, src, src)
+			}
+		case *bool:
+			switch src := src.(type) {
+			case bool:
+				*d.(*bool) = bool(src)
+			case string:
+				b, err := strconv.ParseBool(src)
+				if err != nil {
+					return err
+				}
+				*d.(*bool) = b
 			default:
 				return fmt.Errorf("invalid int col:%d type:%T val:%v", n, src, src)
 			}
