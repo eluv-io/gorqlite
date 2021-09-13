@@ -15,9 +15,10 @@ import (
 	"fmt"
 	"io"
 	"net"
-
+	"net/http"
 	nurl "net/url"
 	"strings"
+	"time"
 )
 
 var errClosed = errors.New("gorqlite: connection is closed")
@@ -66,9 +67,10 @@ type Connection struct {
 
 	// variables below this line need to be initialized in Open()
 
-	timeout       int    //   10
-	hasBeenClosed bool   //   false
-	ID            string //   generated in init()
+	timeout       int          //   10
+	hasBeenClosed bool         //   false
+	ID            string       //   generated in init()
+	client        *http.Client //   user provided or nil
 }
 
 /* *****************************************************************
@@ -80,6 +82,17 @@ type Connection struct {
 func (conn *Connection) Close() {
 	conn.hasBeenClosed = true
 	trace("%s: %s", conn.ID, "closing connection")
+}
+
+func (conn *Connection) apiClient(get bool) *http.Client {
+	ret := conn.client
+	if ret == nil {
+		ret = &http.Client{}
+		if get {
+			ret.Timeout = time.Duration(conn.timeout) * time.Second
+		}
+	}
+	return ret
 }
 
 /* *****************************************************************

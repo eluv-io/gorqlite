@@ -19,11 +19,14 @@ package gorqlite
 		Open, TraceOn(), TraceOff()
 */
 
-import "crypto/rand"
-import "fmt"
-import "io"
-import "io/ioutil"
-import "strings"
+import (
+	"crypto/rand"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"net/http"
+	"strings"
+)
 
 /* *****************************************************************
 
@@ -91,8 +94,14 @@ The URL should be in a form like this:
   https://mary:secret2@somewhere.example.com:1234
   https://mary:secret2@somewhere.example.com // will use 4001
  * *****************************************************************/
-func Open(connURL string) (Connection, error) {
-	var conn Connection
+func Open(connURL string, client ...*http.Client) (Connection, error) {
+	var cl *http.Client
+	if len(client) > 0 {
+		cl = client[0]
+	}
+	conn := Connection{
+		client: cl,
+	}
 
 	// generate our uuid for trace
 	b := make([]byte, 16)

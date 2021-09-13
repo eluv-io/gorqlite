@@ -13,13 +13,14 @@ package gorqlite
 
 */
 
-import "bytes"
-import "encoding/json"
-import "errors"
-import "fmt"
-import "io/ioutil"
-import "net/http"
-import "time"
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+)
 
 /* *****************************************************************
 
@@ -64,17 +65,17 @@ PeerLoop:
 		}
 		trace("%s: http.NewRequest() OK", conn.ID)
 		req.Header.Set("Content-Type", "application/json")
-		client := &http.Client{}
-		client.Timeout = time.Duration(conn.timeout) * time.Second
+
+		client := conn.apiClient(true)
 		response, err := client.Do(req)
 		if err != nil {
 			trace("%s: got error '%s' doing client.Do", conn.ID, err.Error())
 			failureLog = append(failureLog, fmt.Sprintf("%s failed due to %s", url, err.Error()))
 			continue PeerLoop
 		}
-		defer response.Body.Close()
 		trace("%s: client.Do() OK", conn.ID)
 		responseBody, err := ioutil.ReadAll(response.Body)
+		_ = response.Body.Close()
 		if err != nil {
 			trace("%s: got error '%s' doing ioutil.ReadAll", conn.ID, err.Error())
 			failureLog = append(failureLog, fmt.Sprintf("%s failed due to %s", url, err.Error()))
@@ -162,15 +163,15 @@ PeerLoop:
 				continue PeerLoop
 			}
 			req.Header.Set("Content-Type", "application/json")
-			client := &http.Client{}
+			client := conn.apiClient(false)
 			response, err := client.Do(req)
 			if err != nil {
 				trace("%s: got error '%s' doing client.Do", conn.ID, err.Error())
 				failureLog = append(failureLog, fmt.Sprintf("%s failed due to %s", url, err.Error()))
 				continue PeerLoop
 			}
-			defer response.Body.Close()
 			responseBody, err = ioutil.ReadAll(response.Body)
+			_ = response.Body.Close()
 			if err != nil {
 				trace("%s: got error '%s' doing ioutil.ReadAll", conn.ID, err.Error())
 				failureLog = append(failureLog, fmt.Sprintf("%s failed due to %s", url, err.Error()))
