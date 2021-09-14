@@ -276,45 +276,33 @@ func (conn *Connection) initConnection(url string) error {
 		}
 	}
 
-	// default
+	// defaults
 	conn.consistencyLevel = cl_WEAK
+	conn.timeout = 10
+	conn.wantsTransactions = true
 
-	p := strings.Split(u.RawQuery, "&")
-	m := make(map[string]string)
-	for _, pv := range p {
-		kv := strings.Split(pv, "=")
-		if len(kv) < 2 {
-			continue
-		}
-		if _, ok := m[kv[0]]; !ok {
-			m[kv[0]] = kv[1]
-		}
-	}
-
-	if level, ok := m["level"]; ok {
-		if level == "weak" {
-			// that's ok but nothing to do
-		} else if level == "strong" {
+	if u.RawQuery != "" {
+		q := u.Query()
+		level := q.Get("level")
+		switch level {
+		case "", "weak":
+		case "strong":
 			conn.consistencyLevel = cl_STRONG
-		} else if level == "none" { // the fools!
+		case "none":
 			conn.consistencyLevel = cl_NONE
-		} else {
+		default:
 			return errors.New("invalid level: " + level)
 		}
-	}
-
-	if ts, ok := m["timeout"]; ok {
-		var ti int
-		if ti, err = strconv.Atoi(ts); err != nil {
-			return errors.New("invalid timeout: " + ts)
+		// timeout: default is set before initConnection is called
+		ts := q.Get("timeout")
+		if len(ts) > 0 {
+			var ti int
+			if ti, err = strconv.Atoi(ts); err != nil {
+				return errors.New("invalid timeout: " + ts)
+			}
+			conn.timeout = ti
 		}
-		conn.timeout = ti
-	} else {
-		conn.timeout = defaultTimeout
 	}
-
-	// Default transaction state
-	conn.wantsTransactions = true
 
 	trace("%s: parseDefaultPeer() is done:", conn.ID)
 	if conn.wantsHTTPS == true {
