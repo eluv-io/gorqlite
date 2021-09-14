@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 
 	nurl "net/url"
 	"strings"
@@ -70,6 +71,8 @@ type Connection struct {
 	hasBeenClosed bool   //   false
 	ID            string //   generated in init()
 }
+
+var defaultTimeout = 10
 
 /* *****************************************************************
 
@@ -194,7 +197,7 @@ func (conn *Connection) SetExecutionWithTransaction(state bool) error {
 		https://mary:secret2@localhost:4001/db
 		https://mary:secret2@server1.example.com:4001/db?level=none
 		https://mary:secret2@server2.example.com:4001/db?level=weak
-		https://mary:secret2@localhost:2265/db?level=strong
+		https://mary:secret2@localhost:2265/db?level=strong?timeout=1
 
 	to use default connection to localhost:4001 with no auth:
 		http://
@@ -209,6 +212,7 @@ func (conn *Connection) SetExecutionWithTransaction(state bool) error {
 		hostname                    "localhost"
 		port                        "4001"
 		consistencyLevel            "weak"
+		timeout						"10"
 */
 
 func (conn *Connection) initConnection(url string) error {
@@ -272,26 +276,41 @@ func (conn *Connection) initConnection(url string) error {
 		}
 	}
 
-	/*
-
-		at the moment, the only allowed query is "level=" with
-		the desired consistency level
-
-	*/
-
 	// default
 	conn.consistencyLevel = cl_WEAK
 
-	if u.RawQuery != "" {
-		if u.RawQuery == "level=weak" {
+	p := strings.Split(u.RawQuery, "&")
+	m := make(map[string]string)
+	for _, pv := range p {
+		kv := strings.Split(pv, "=")
+		if len(kv) < 2 {
+			continue
+		}
+		if _, ok := m[kv[0]]; !ok {
+			m[kv[0]] = kv[1]
+		}
+	}
+
+	if level, ok := m["level"]; ok {
+		if level == "weak" {
 			// that's ok but nothing to do
-		} else if u.RawQuery == "level=strong" {
+		} else if level == "strong" {
 			conn.consistencyLevel = cl_STRONG
-		} else if u.RawQuery == "level=none" { // the fools!
+		} else if level == "none" { // the fools!
 			conn.consistencyLevel = cl_NONE
 		} else {
-			return errors.New("don't know what to do with this query: " + u.RawQuery)
+			return errors.New("invalid level: " + level)
 		}
+	}
+
+	if ts, ok := m["timeout"]; ok {
+		var ti int
+		if ti, err = strconv.Atoi(ts); err != nil {
+			return errors.New("invalid timeout: " + ts)
+		}
+		conn.timeout = ti
+	} else {
+		conn.timeout = defaultTimeout
 	}
 
 	// Default transaction state
@@ -308,7 +327,8 @@ func (conn *Connection) initConnection(url string) error {
 	trace("%s:    %s -> %s", conn.ID, "hostname", conn.cluster.leader.hostname)
 	trace("%s:    %s -> %s", conn.ID, "port", conn.cluster.leader.port)
 	trace("%s:    %s -> %s", conn.ID, "consistencyLevel", consistencyLevelNames[conn.consistencyLevel])
-	trace("%s:    %s -> %s", conn.ID, "wantTransaction", conn.wantsTransactions)
+	trace("%s:    %s -> %v", conn.ID, "wantTransaction", conn.wantsTransactions)
+	trace("%s:    %s -> %v", conn.ID, "timeout", conn.timeout)
 
 	conn.cluster.conn = conn
 
