@@ -106,11 +106,28 @@ func (conn *Connection) QueryOne(sqlStatement string) (qr QueryResult, err error
 }
 
 /*
-Query() is used to perform SELECT operations in the database.
+Query is used to perform SELECT operations in the database.
 
-It takes an array of SQL statements and executes them in a single transaction, returning an array of QueryResult vars.
+It takes an array of SQL statements and executes them in a single transaction,
+returning an array of QueryResult vars.
 */
 func (conn *Connection) Query(sqlStatements []string) (results []QueryResult, err error) {
+	jStatements, err := json.Marshal(sqlStatements)
+	if err != nil {
+		return nil, err
+	}
+	return conn.query(jStatements)
+}
+
+func (conn *Connection) Queries(sqlStatements ...*Statement) (results []QueryResult, err error) {
+	jStatements, err := json.Marshal(sqlStatements)
+	if err != nil {
+		return nil, err
+	}
+	return conn.query(jStatements)
+}
+
+func (conn *Connection) query(sqlStatements []byte) (results []QueryResult, err error) {
 	results = make([]QueryResult, 0)
 
 	if conn.hasBeenClosed {

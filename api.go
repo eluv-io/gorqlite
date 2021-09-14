@@ -9,8 +9,6 @@ package gorqlite
 	There is some code duplication between those and they should
 	probably be combined into one function.
 
-	nothing public here.
-
 */
 
 import (
@@ -20,6 +18,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 )
 
 /* *****************************************************************
@@ -101,6 +100,58 @@ PeerLoop:
 	return responseBody, errors.New(stringBuffer.String())
 }
 
+// Statement enables use of parameterized sql statement.
+// The constructor issues a warning if the number of parameters does not match
+// the count of ? in the query.
+// example:
+//   x := NewStatement(
+//      "INSERT INTO Foo (id, name) VALUES ( ?, ? )",
+//      1,
+//      "bob")
+type Statement struct {
+	Sql        string
+	Parameters []interface{}
+	Warning    string
+}
+
+func NewStatement(sql string, params ...interface{}) *Statement {
+
+	warn := ""
+	paramsCount := strings.Count(sql, "?")
+	if paramsCount != len(params) {
+		warn = fmt.Sprintf("Unexpected parameters count: %d, expected: %d",
+			len(params),
+			paramsCount)
+	}
+
+	return &Statement{
+		Sql:        sql,
+		Parameters: params,
+		Warning:    warn,
+	}
+}
+
+// Append appends the given sql string and parameters to the current and returns
+// the modified statement.
+func (s *Statement) Append(sql string, params ...interface{}) *Statement {
+	s.Sql += sql
+	s.Parameters = append(s.Parameters, params...)
+	return s
+}
+
+// String reconstructs the sql request without parsing (as best effort).
+// Use it for debug.
+func (s *Statement) String() string {
+	sql := strings.ReplaceAll(s.Sql, "?", "%v")
+	return fmt.Sprintf(sql, s.Parameters...)
+}
+
+func (s *Statement) MarshalJSON() ([]byte, error) {
+	all := make([]interface{}, 0, len(s.Parameters)+1)
+	all = append(append(all, s.Sql), s.Parameters...)
+	return json.Marshal(all)
+}
+
 /* *****************************************************************
 
    method: rqliteApiPost() - for api_QUERY and api_WRITE
@@ -114,25 +165,16 @@ PeerLoop:
 	depending on the API operation type (api_QUERY vs. api_WRITE)
 
  * *****************************************************************/
-
-func (conn *Connection) rqliteApiPost(apiOp apiOperation, sqlStatements []string) ([]byte, error) {
+func (conn *Connection) rqliteApiPost(apiOp apiOperation, jStatements []byte) ([]byte, error) {
 	var responseBody []byte
 
 	switch apiOp {
 	case api_QUERY:
-		trace("%s: rqliteApiGet() post called for a QUERY of %d statements", conn.ID, len(sqlStatements))
+		trace("%s: rqliteApiGet() post called for a QUERY of %d statements", conn.ID, len(jStatements))
 	case api_WRITE:
-		trace("%s: rqliteApiGet() post called for a QUERY of %d statements", conn.ID, len(sqlStatements))
+		trace("%s: rqliteApiGet() post called for a QUERY of %d statements", conn.ID, len(jStatements))
 	default:
 		return responseBody, errors.New("weird! called for an invalid apiOperation in rqliteApiPost()")
-	}
-
-	// jsonify the statements.  not really needed in the
-	// case of api_STATUS but doesn't hurt
-
-	jStatements, err := json.Marshal(sqlStatements)
-	if err != nil {
-		return nil, err
 	}
 
 	// just to be safe, check this

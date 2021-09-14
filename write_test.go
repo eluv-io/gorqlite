@@ -106,3 +106,47 @@ func TestWrite(t *testing.T) {
 	}
 
 }
+
+func TestWrites(t *testing.T) {
+	t.Logf("trying Open")
+	conn, err := Open(testUrl())
+	if err != nil {
+		t.Logf("--> FATAL")
+		t.Fatal(err)
+	}
+
+	t.Logf("trying Write DROP & CREATE")
+	results, err := conn.Write([]string{
+		"DROP TABLE IF EXISTS " + testTableName() + "",
+		"CREATE TABLE " + testTableName() + " (id integer, name text)",
+	})
+	if err != nil {
+		t.Logf("--> FAILED")
+		t.Fail()
+	}
+
+	t.Logf("trying Write INSERT")
+	insert := "INSERT INTO " + testTableName() + " (id, name) VALUES ( ?, ? )"
+	s := make([]*Statement, 0)
+	s = append(s, NewStatement(insert, 1, "aaa bbb ccc"))
+	s = append(s, NewStatement(insert, 2, "ddd eee fff"))
+	s = append(s, NewStatement(insert, 3, "ggg hhh iii"))
+	s = append(s, NewStatement(insert, 4, "jjj kkk lll"))
+	results, err = conn.Writes(s...)
+	if err != nil {
+		t.Logf("--> FAILED")
+		t.Fail()
+	}
+	if len(results) != 4 {
+		t.Logf("--> FAILED")
+		t.Fail()
+	}
+
+	t.Logf("trying Write DROP")
+	results, err = conn.Write([]string{"DROP TABLE IF EXISTS " + testTableName()})
+	if err != nil {
+		t.Logf("--> FAILED")
+		t.Fail()
+	}
+
+}
