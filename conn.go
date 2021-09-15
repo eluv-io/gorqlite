@@ -67,12 +67,12 @@ type Connection struct {
 
 	// variables below this line need to be initialized in Open()
 
-	timeout       int    //   10
+	timeout       int    //   2
 	hasBeenClosed bool   //   false
 	ID            string //   generated in init()
 }
 
-var defaultTimeout = 10
+var defaultTimeout = 2
 
 /* *****************************************************************
 
@@ -212,7 +212,7 @@ func (conn *Connection) SetExecutionWithTransaction(state bool) error {
 		hostname                    "localhost"
 		port                        "4001"
 		consistencyLevel            "weak"
-		timeout						"10"
+		timeout						"2"
 */
 
 func (conn *Connection) initConnection(url string) error {
@@ -278,7 +278,7 @@ func (conn *Connection) initConnection(url string) error {
 
 	// defaults
 	conn.consistencyLevel = cl_WEAK
-	conn.timeout = 10
+	conn.timeout = defaultTimeout
 	conn.wantsTransactions = true
 
 	if u.RawQuery != "" {
