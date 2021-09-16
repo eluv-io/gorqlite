@@ -1,6 +1,7 @@
 package gorqlite
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -90,18 +91,13 @@ import (
 
  * *****************************************************************/
 
-/*
-QueryOne() is a convenience method that wraps Query() into a single-statement
-method.
-*/
+// QueryOne is a convenience method that wraps Query() into a single-statement method.
 func (conn *Connection) QueryOne(sqlStatement string) (qr QueryResult, err error) {
 	if conn.hasBeenClosed {
 		qr.Err = errClosed
 		return qr, errClosed
 	}
-	sqlStatements := make([]string, 0)
-	sqlStatements = append(sqlStatements, sqlStatement)
-	qra, err := conn.Query(sqlStatements)
+	qra, err := conn.Query([]string{sqlStatement})
 	return qra[0], err
 }
 
@@ -116,18 +112,18 @@ func (conn *Connection) Query(sqlStatements []string) (results []QueryResult, er
 	if err != nil {
 		return nil, err
 	}
-	return conn.query(jStatements)
+	return conn.query(context.Background(), jStatements)
 }
 
-func (conn *Connection) Queries(sqlStatements ...*Statement) (results []QueryResult, err error) {
+func (conn *Connection) QueryStmt(ctx context.Context, sqlStatements ...*Statement) (results []QueryResult, err error) {
 	jStatements, err := json.Marshal(sqlStatements)
 	if err != nil {
 		return nil, err
 	}
-	return conn.query(jStatements)
+	return conn.query(ctx, jStatements)
 }
 
-func (conn *Connection) query(sqlStatements []byte) (results []QueryResult, err error) {
+func (conn *Connection) query(ctx context.Context, sqlStatements []byte) (results []QueryResult, err error) {
 	results = make([]QueryResult, 0)
 
 	if conn.hasBeenClosed {
@@ -139,7 +135,7 @@ func (conn *Connection) query(sqlStatements []byte) (results []QueryResult, err 
 	trace("%s: Query() for %d statements", conn.ID, len(sqlStatements))
 
 	// if we get an error POSTing, that's a showstopper
-	response, err := conn.rqliteApiPost(api_QUERY, sqlStatements)
+	response, err := conn.rqliteApiPost(ctx, api_QUERY, sqlStatements)
 	if err != nil {
 		trace("%s: rqliteApiCall() ERROR: %s", conn.ID, err.Error())
 		var errResult QueryResult

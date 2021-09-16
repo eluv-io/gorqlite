@@ -19,6 +19,7 @@ package gorqlite
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -231,14 +232,14 @@ func (conn *Connection) processClusterInfoBody(responseBody []byte, rc *rqliteCl
 	return nil
 }
 
-func (conn *Connection) updateClusterInfo() error {
+func (conn *Connection) updateClusterInfo(ctx context.Context) error {
 	trace("%s: updateClusterInfo() called", conn.ID)
 
 	// start with a fresh new cluster
 	var rc rqliteCluster
 	rc.conn = conn
 
-	responseBody, err := conn.rqliteApiGet(api_STATUS)
+	responseBody, err := conn.rqliteApiGet(ctx, api_STATUS)
 	if err != nil {
 		return err
 	}
@@ -251,10 +252,10 @@ func (conn *Connection) updateClusterInfo() error {
 	if rc.leader.hostname == "" {
 		// nodes/ API is available in 6.0+
 		trace("getting leader from metadata failed, trying nodes/")
-		responseBody, err := conn.rqliteApiGet(api_NODES)
+		responseBody, err := conn.rqliteApiGet(ctx, api_NODES)
 		if err != nil {
 			// return errors.New("could not determine leader from API nodes call")
-			return fmt.Errorf("could not determine leader from API nodes call: %v",err.Error())
+			return fmt.Errorf("could not determine leader from API nodes call: %v", err.Error())
 		}
 		trace("%s: updateClusterInfo() back from api call OK", conn.ID)
 

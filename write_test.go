@@ -1,6 +1,9 @@
 package gorqlite
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 // import "os"
 
@@ -132,7 +135,7 @@ func TestWrites(t *testing.T) {
 	s = append(s, NewStatement(insert, 2, "ddd eee fff"))
 	s = append(s, NewStatement(insert, 3, "ggg hhh iii"))
 	s = append(s, NewStatement(insert, 4, "jjj kkk lll"))
-	results, err = conn.Writes(s...)
+	results, err = conn.WriteStmt(context.Background(), s...)
 	if err != nil {
 		t.Logf("--> FAILED")
 		t.Fail()

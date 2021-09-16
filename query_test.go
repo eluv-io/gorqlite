@@ -1,6 +1,7 @@
 package gorqlite
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -192,7 +193,9 @@ func TestQueries(t *testing.T) {
 	t.Logf("trying WriteOne DROP")
 	// note: this returns a syntax error 'near ?'
 	//NewStatement("DROP TABLE IF EXISTS ? " , testTableName())
-	wr, err := conn.Writes(NewStatement("DROP TABLE IF EXISTS " + testTableName()))
+	wr, err := conn.WriteStmt(
+		context.Background(),
+		NewStatement("DROP TABLE IF EXISTS "+testTableName()))
 	if err != nil {
 		t.Logf("--> FATAL")
 		t.Fatal()
@@ -204,7 +207,9 @@ func TestQueries(t *testing.T) {
 	t.Logf("trying WriteOne CREATE")
 	// This error: near "?": syntax error
 	//NewStatement("CREATE TABLE ? (id integer, name text, ts DATETIME DEFAULT CURRENT_TIMESTAMP)", testTableName())
-	wr, err = conn.Writes(NewStatement("CREATE TABLE " + testTableName() + " (id integer, name text, ts DATETIME DEFAULT CURRENT_TIMESTAMP)"))
+	wr, err = conn.WriteStmt(
+		context.Background(),
+		NewStatement("CREATE TABLE "+testTableName()+" (id integer, name text, ts DATETIME DEFAULT CURRENT_TIMESTAMP)"))
 	if err != nil {
 		t.Logf("--> FATAL")
 		t.Fatal()
@@ -223,14 +228,16 @@ func TestQueries(t *testing.T) {
 	s = append(s, NewStatement(insert, 3, "Klingon"))
 	s = append(s, NewStatement(insert, 4, "Ferengi"))
 	s = append(s, NewStatement(insertTs, 5, "Cardassian", met))
-	wResults, err := conn.Writes(s...)
+	wResults, err := conn.WriteStmt(context.Background(), s...)
 	if err != nil {
 		t.Logf("--> FATAL")
 		t.Fatal()
 	}
 
 	t.Logf("trying Queries")
-	qrs, err := conn.Queries(NewStatement("SELECT name, ts FROM "+testTableName()+" WHERE id > 3", 3))
+	qrs, err := conn.QueryStmt(
+		context.Background(),
+		NewStatement("SELECT name, ts FROM "+testTableName()+" WHERE id > 3", 3))
 	if err != nil {
 		t.Logf("--> FAILED")
 		t.Fail()
@@ -310,7 +317,9 @@ func TestQueries(t *testing.T) {
 	}
 
 	t.Logf("trying WriteOne DROP")
-	wr, err = conn.Writes(NewStatement("DROP TABLE IF EXISTS " + testTableName()))
+	wr, err = conn.WriteStmt(
+		context.Background(),
+		NewStatement("DROP TABLE IF EXISTS "+testTableName()))
 	if err != nil {
 		t.Logf("--> FAILED")
 		t.Fail()
@@ -321,7 +330,7 @@ func TestQueries(t *testing.T) {
 
 	t.Logf("trying WriteOne after Close")
 	del := NewStatement("DROP TABLE IF EXISTS " + testTableName())
-	wr, err = conn.Writes(del)
+	wr, err = conn.WriteStmt(context.Background(), del)
 	if err != errClosed {
 		t.Logf("--> FAILED")
 		t.Fail()
@@ -329,14 +338,16 @@ func TestQueries(t *testing.T) {
 
 	t.Logf("trying Write after Close")
 	t1 := []*Statement{del, del}
-	wResults, err = conn.Writes(t1...)
+	wResults, err = conn.WriteStmt(context.Background(), t1...)
 	if err != errClosed {
 		t.Logf("--> FAILED")
 		t.Fail()
 	}
 
 	t.Logf("trying Queries after Close")
-	_, err = conn.Queries(NewStatement("SELECT id FROM ?", testTableName()))
+	_, err = conn.QueryStmt(
+		context.Background(),
+		NewStatement("SELECT id FROM ?", testTableName()))
 	if err != errClosed {
 		t.Logf("--> FAILED")
 		t.Fail()
@@ -348,7 +359,7 @@ func TestQueries(t *testing.T) {
 		NewStatement("SELECT name FROM ?", testTableName()),
 		NewStatement("SELECT id,name FROM ?", testTableName()),
 	}
-	_, err = conn.Queries(t2...)
+	_, err = conn.QueryStmt(context.Background(), t2...)
 	if err != errClosed {
 		t.Logf("--> FAILED")
 		t.Fail()

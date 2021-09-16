@@ -1,8 +1,10 @@
 package gorqlite
 
-import "testing"
-
-import "os"
+import (
+	"context"
+	"os"
+	"testing"
+)
 
 func TestProcessInfoRespone(t *testing.T) {
 
@@ -26,7 +28,7 @@ func TestInitCluster(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	l, err := conn.Leader()
+	l, err := conn.Leader(context.Background())
 	if err != nil {
 		t.Logf("--> FAILED")
 		t.Fail()
@@ -37,7 +39,7 @@ func TestInitCluster(t *testing.T) {
 		t.Fail()
 	}
 
-	p, err := conn.Peers()
+	p, err := conn.Peers(context.Background())
 	if err != nil {
 		t.Logf("--> FAILED")
 		t.Fail()

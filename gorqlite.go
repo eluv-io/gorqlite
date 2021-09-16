@@ -20,6 +20,7 @@ package gorqlite
 */
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"io"
@@ -76,25 +77,30 @@ func init() {
 
 }
 
-/* *****************************************************************
-Open() creates and returns a "connection" to rqlite.
-
-Since rqlite is stateless, there is no actual connection.  Open() creates and initializes a gorqlite Connection type, which represents various config information.
-
-The URL should be in a form like this:
-
-	http://localhost:4001
-
-	http://     default, no auth, localhost:4001
-	https://    default, no auth, localhost:4001, using https
-
-	http://localhost:1234
-	http://mary:secret2@localhost:1234
-
-  https://mary:secret2@somewhere.example.com:1234
-  https://mary:secret2@somewhere.example.com // will use 4001
- * *****************************************************************/
+// Open creates and returns a "connection" to rqlite.
+//
+// Since rqlite is stateless, there is no actual connection.
+// Open creates and initializes a gorqlite Connection, which represents various
+// config information.
+//
+// The URL should be in a form like this:
+//
+//	http://localhost:4001
+//
+//	http://     default, no auth, localhost:4001
+//	https://    default, no auth, localhost:4001, using https
+//
+//	http://localhost:1234
+//	http://mary:secret2@localhost:1234
+//
+//  https://mary:secret2@somewhere.example.com:1234
+//  https://mary:secret2@somewhere.example.com // will use 4001
+//
 func Open(connURL string, client ...*http.Client) (Connection, error) {
+	return OpenContext(context.Background(), connURL, client...)
+}
+
+func OpenContext(ctx context.Context, connURL string, client ...*http.Client) (Connection, error) {
 	var cl *http.Client
 	if len(client) > 0 {
 		cl = client[0]
@@ -125,7 +131,7 @@ func Open(connURL string, client ...*http.Client) (Connection, error) {
 	// call updateClusterInfo() to populate the cluster
 	// also tests the user's default
 
-	err = conn.updateClusterInfo()
+	err = conn.updateClusterInfo(ctx)
 
 	// and the err from updateClusterInfo() will be our err as well
 	return conn, err
@@ -168,7 +174,7 @@ func trace(pattern string, args ...interface{}) {
 	// make sure there is one and only one newline
 	nlPattern := strings.TrimSpace(pattern) + "\n"
 	msg := fmt.Sprintf(nlPattern, args...)
-	traceOut.Write([]byte(msg))
+	_, _ = traceOut.Write([]byte(msg))
 }
 
 /*

@@ -7,6 +7,7 @@ package gorqlite
 */
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -85,18 +86,18 @@ func (conn *Connection) Write(sqlStatements []string) (results []WriteResult, er
 	if err != nil {
 		return nil, err
 	}
-	return conn.write(jStatements)
+	return conn.write(context.Background(), jStatements)
 }
 
-func (conn *Connection) Writes(sqlStatements ...*Statement) (results []WriteResult, err error) {
+func (conn *Connection) WriteStmt(ctx context.Context, sqlStatements ...*Statement) (results []WriteResult, err error) {
 	jStatements, err := json.Marshal(sqlStatements)
 	if err != nil {
 		return nil, err
 	}
-	return conn.write(jStatements)
+	return conn.write(ctx, jStatements)
 }
 
-func (conn *Connection) write(sqlStatements []byte) (results []WriteResult, err error) {
+func (conn *Connection) write(ctx context.Context, sqlStatements []byte) (results []WriteResult, err error) {
 	results = make([]WriteResult, 0)
 
 	if conn.hasBeenClosed {
@@ -108,7 +109,7 @@ func (conn *Connection) write(sqlStatements []byte) (results []WriteResult, err 
 
 	trace("%s: Write() for %d statements", conn.ID, len(sqlStatements))
 
-	response, err := conn.rqliteApiPost(api_WRITE, sqlStatements)
+	response, err := conn.rqliteApiPost(ctx, api_WRITE, sqlStatements)
 	if err != nil {
 		trace("%s: rqliteApiCall() ERROR: %s", conn.ID, err.Error())
 		var errResult WriteResult

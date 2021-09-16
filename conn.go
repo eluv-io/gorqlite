@@ -11,6 +11,7 @@ package gorqlite
  * *****************************************************************/
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -114,12 +115,12 @@ func (conn *Connection) ConsistencyLevel() (string, error) {
 
  * *****************************************************************/
 
-func (conn *Connection) Leader() (string, error) {
+func (conn *Connection) Leader(ctx context.Context) (string, error) {
 	if conn.hasBeenClosed {
 		return "", errClosed
 	}
 	trace("%s: Leader(), calling updateClusterInfo()", conn.ID)
-	err := conn.updateClusterInfo()
+	err := conn.updateClusterInfo(ctx)
 	if err != nil {
 		trace("%s: Leader() got error from updateClusterInfo(): %s", conn.ID, err.Error())
 		return "", err
@@ -135,7 +136,7 @@ func (conn *Connection) Leader() (string, error) {
 
  * *****************************************************************/
 
-func (conn *Connection) Peers() ([]string, error) {
+func (conn *Connection) Peers(ctx context.Context) ([]string, error) {
 	if conn.hasBeenClosed {
 		var ans []string
 		return ans, errClosed
@@ -143,7 +144,7 @@ func (conn *Connection) Peers() ([]string, error) {
 	plist := make([]string, 0)
 
 	trace("%s: Peers(), calling updateClusterInfo()", conn.ID)
-	err := conn.updateClusterInfo()
+	err := conn.updateClusterInfo(ctx)
 	if err != nil {
 		trace("%s: Peers() got error from updateClusterInfo(): %s", conn.ID, err.Error())
 		return plist, err

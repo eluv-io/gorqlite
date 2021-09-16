@@ -13,6 +13,7 @@ package gorqlite
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,7 +32,7 @@ import (
 
  * *****************************************************************/
 
-func (conn *Connection) rqliteApiGet(apiOp apiOperation) ([]byte, error) {
+func (conn *Connection) rqliteApiGet(ctx context.Context, apiOp apiOperation) ([]byte, error) {
 	var responseBody []byte
 	trace("%s: rqliteApiGet() called", conn.ID)
 
@@ -56,7 +57,7 @@ PeerLoop:
 		trace("%s: attemping to contact peer %d", conn.ID, peerNum)
 		// docs say default GET policy is up to 10 follows automatically
 		url := conn.assembleURL(apiOp, peerToTry)
-		req, err := http.NewRequest("GET", url, nil)
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
 			trace("%s: got error '%s' doing http.NewRequest", conn.ID, err.Error())
 			failureLog = append(failureLog, fmt.Sprintf("%s failed due to %s", url, err.Error()))
@@ -165,7 +166,7 @@ func (s *Statement) MarshalJSON() ([]byte, error) {
 	depending on the API operation type (api_QUERY vs. api_WRITE)
 
  * *****************************************************************/
-func (conn *Connection) rqliteApiPost(apiOp apiOperation, jStatements []byte) ([]byte, error) {
+func (conn *Connection) rqliteApiPost(ctx context.Context, apiOp apiOperation, jStatements []byte) ([]byte, error) {
 	var responseBody []byte
 
 	switch apiOp {
@@ -198,7 +199,7 @@ PeerLoop:
 		var url string
 		for responseStatus == "Haven't Tried Yet" || responseStatus == "301 Moved Permanently" {
 			url = conn.assembleURL(apiOp, peer)
-			req, err := http.NewRequest("POST", url, bytes.NewBuffer(jStatements))
+			req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jStatements))
 			if err != nil {
 				trace("%s: got error '%s' doing http.NewRequest", conn.ID, err.Error())
 				failureLog = append(failureLog, fmt.Sprintf("%s failed due to %s", url, err.Error()))
