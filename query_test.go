@@ -30,9 +30,11 @@ func TestQueryOne(t *testing.T) {
 
 	// give an extra second for time diff between local and rqlite
 	started := time.Now().Add(-time.Second)
+	_ = started
 
 	t.Logf("trying WriteOne CREATE")
-	wr, err = conn.WriteOne("CREATE TABLE " + testTableName() + " (id integer, name text, ts DATETIME DEFAULT CURRENT_TIMESTAMP)")
+	// note: DATETIME DEFAULT CURRENT_TIMESTAMP does not work
+	wr, err = conn.WriteOne("CREATE TABLE " + testTableName() + " (id integer, name text, ts INT_DATETIME DEFAULT CURRENT_TIMESTAMP)")
 	if err != nil {
 		t.Logf("--> FATAL")
 		t.Fatal()
@@ -44,11 +46,11 @@ func TestQueryOne(t *testing.T) {
 
 	t.Logf("trying Write INSERT")
 	s := make([]string, 0)
-	s = append(s, "INSERT INTO "+testTableName()+" (id, name) VALUES ( 1, 'Romulan' )")
-	s = append(s, "INSERT INTO "+testTableName()+" (id, name) VALUES ( 2, 'Vulcan' )")
-	s = append(s, "INSERT INTO "+testTableName()+" (id, name) VALUES ( 3, 'Klingon' )")
-	s = append(s, "INSERT INTO "+testTableName()+" (id, name) VALUES ( 4, 'Ferengi' )")
-	s = append(s, "INSERT INTO "+testTableName()+" (id, name, ts) VALUES ( 5, 'Cardassian',"+met+" )")
+	s = append(s, "INSERT INTO "+testTableName()+" (id, name) VALUES ( 1, 'Romulan')")
+	s = append(s, "INSERT INTO "+testTableName()+" (id, name) VALUES ( 2, 'Vulcan')")
+	s = append(s, "INSERT INTO "+testTableName()+" (id, name) VALUES ( 3, 'Klingon')")
+	s = append(s, "INSERT INTO "+testTableName()+" (id, name) VALUES ( 4, 'Ferengi')")
+	s = append(s, "INSERT INTO "+testTableName()+" (id, name, ts) VALUES ( 5, 'Cardassian', "+met+")")
 	wResults, err = conn.Write(s)
 	if err != nil {
 		t.Logf("--> FATAL")
@@ -79,8 +81,8 @@ func TestQueryOne(t *testing.T) {
 		t.Logf("--> FAILED")
 		t.Fail()
 	}
-	if ts, ok := r["ts"]; ok {
-		if ts, ok := ts.(time.Time); ok {
+	if mts, ok := r["ts"]; ok {
+		if ts, ok := mts.(time.Time); ok {
 			// time should not be zero because it defaults to current utc time
 			if ts.IsZero() {
 				t.Logf("--> FAILED: time is zero")
@@ -125,7 +127,7 @@ func TestQueryOne(t *testing.T) {
 		t.Logf("--> FAILED")
 		t.Fail()
 	}
-	if ts != meeting {
+	if ts.Unix() != meeting.Unix() {
 		t.Logf("--> FAILED")
 		t.Fail()
 	}
@@ -207,9 +209,14 @@ func TestQueries(t *testing.T) {
 	t.Logf("trying WriteOne CREATE")
 	// This error: near "?": syntax error
 	//NewStatement("CREATE TABLE ? (id integer, name text, ts DATETIME DEFAULT CURRENT_TIMESTAMP)", testTableName())
+	// NOTE: for some reason, creating the table with 'ts DATETIME DEFAULT CURRENT_TIMESTAMP'
+	//       makes the ts column always be nil. As a consequence values returned by the Map()
+	//       function are not parsed and returned as string.
+	//       This used to work with rqlite master checked out on August 12
+	//       This does not work any more Sept. 16 using a fresh checkout of master.
 	wr, err = conn.WriteStmt(
 		context.Background(),
-		NewStatement("CREATE TABLE "+testTableName()+" (id integer, name text, ts DATETIME DEFAULT CURRENT_TIMESTAMP)"))
+		NewStatement("CREATE TABLE "+testTableName()+" (id integer, name text, ts INT_DATETIME DEFAULT CURRENT_TIMESTAMP)"))
 	if err != nil {
 		t.Logf("--> FATAL")
 		t.Fatal()
@@ -217,7 +224,6 @@ func TestQueries(t *testing.T) {
 
 	// When the Federation met the Cardassians
 	meeting := time.Date(2424, 1, 2, 17, 0, 0, 0, time.UTC)
-	met := fmt.Sprint(meeting.Unix())
 
 	t.Logf("trying Write INSERT")
 	s := make([]*Statement, 0)
@@ -227,7 +233,7 @@ func TestQueries(t *testing.T) {
 	s = append(s, NewStatement(insert, 2, "Vulcan"))
 	s = append(s, NewStatement(insert, 3, "Klingon"))
 	s = append(s, NewStatement(insert, 4, "Ferengi"))
-	s = append(s, NewStatement(insertTs, 5, "Cardassian", met))
+	s = append(s, NewStatement(insertTs, 5, "Cardassian", meeting.Unix()))
 	wResults, err := conn.WriteStmt(context.Background(), s...)
 	if err != nil {
 		t.Logf("--> FATAL")
@@ -265,8 +271,8 @@ func TestQueries(t *testing.T) {
 		t.Logf("--> FAILED")
 		t.Fail()
 	}
-	if ts, ok := r["ts"]; ok {
-		if ts, ok := ts.(time.Time); ok {
+	if mts, ok := r["ts"]; ok {
+		if ts, ok := mts.(time.Time); ok {
 			// time should not be zero because it defaults to current utc time
 			if ts.IsZero() {
 				t.Logf("--> FAILED: time is zero")
@@ -276,7 +282,7 @@ func TestQueries(t *testing.T) {
 				t.Fail()
 			}
 		} else {
-			t.Logf("--> FAILED: ts is a real %T", ts)
+			t.Logf("--> FAILED: ts is a real %T", mts)
 			t.Fail()
 		}
 	} else {
@@ -311,7 +317,7 @@ func TestQueries(t *testing.T) {
 		t.Logf("--> FAILED")
 		t.Fail()
 	}
-	if ts != meeting {
+	if ts.Unix() != meeting.Unix() {
 		t.Logf("--> FAILED")
 		t.Fail()
 	}

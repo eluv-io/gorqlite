@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -287,8 +288,12 @@ func (qr *QueryResult) Map() (map[string]interface{}, error) {
 
 	thisRowValues := qr.values[qr.rowNumber].([]interface{})
 	for i := 0; i < len(qr.columns); i++ {
-		switch qr.types[i] {
-		case "date", "datetime":
+		// - creating a table with column 'ts DATETIME DEFAULT CURRENT_TIMESTAMP'
+		//   makes it be always nil (affinity is NUMERIC - see: https://www.sqlite.org/datatype3.html)
+		// - using 'ts INT_DATETIME DEFAULT CURRENT_TIMESTAMP' makes it work...
+		// This used to work though - see comment in TestQueries
+		if strings.Contains(qr.types[i], "date") || strings.Contains(qr.types[i], "time") {
+			//case "date", "datetime":
 			if thisRowValues[i] != nil {
 				t, err := toTime(thisRowValues[i])
 				if err != nil {
@@ -298,7 +303,7 @@ func (qr *QueryResult) Map() (map[string]interface{}, error) {
 			} else {
 				ans[qr.columns[i]] = nil
 			}
-		default:
+		} else {
 			ans[qr.columns[i]] = thisRowValues[i]
 		}
 	}
