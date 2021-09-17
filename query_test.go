@@ -31,7 +31,7 @@ func TestQueryOne(t *testing.T) {
 	started := time.Now().Add(-time.Second)
 
 	t.Logf("trying WriteOne CREATE")
-	wr, err = conn.WriteOne("CREATE TABLE " + testTableName() + " (id integer, name text, ts DATETIME DEFAULT CURRENT_TIMESTAMP)")
+	wr, err = conn.WriteOne("CREATE TABLE " + testTableName() + " (id integer, name text, ts INT_DATETIME DEFAULT CURRENT_TIMESTAMP)")
 	if err != nil {
 		t.Logf("--> FATAL")
 		t.Fatal()
@@ -78,8 +78,8 @@ func TestQueryOne(t *testing.T) {
 		t.Logf("--> FAILED")
 		t.Fail()
 	}
-	if ts, ok := r["ts"]; ok {
-		if ts, ok := ts.(time.Time); ok {
+	if mts, ok := r["ts"]; ok {
+		if ts, ok := mts.(time.Time); ok {
 			// time should not be zero because it defaults to current utc time
 			if ts.IsZero() {
 				t.Logf("--> FAILED: time is zero")
@@ -89,7 +89,7 @@ func TestQueryOne(t *testing.T) {
 				t.Fail()
 			}
 		} else {
-			t.Logf("--> FAILED: ts is a real %T", ts)
+			t.Logf("--> FAILED: ts is a real %T", mts)
 			t.Fail()
 		}
 	} else {
@@ -124,7 +124,7 @@ func TestQueryOne(t *testing.T) {
 		t.Logf("--> FAILED")
 		t.Fail()
 	}
-	if ts != meeting {
+	if ts.Unix() != meeting.Unix() {
 		t.Logf("--> FAILED")
 		t.Fail()
 	}
