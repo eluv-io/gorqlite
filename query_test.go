@@ -92,7 +92,7 @@ func TestQueryOne(t *testing.T) {
 				t.Fail()
 			}
 		} else {
-			t.Logf("--> FAILED: ts is a real %T", ts)
+			t.Logf("--> FAILED: ts is a real %T", mts)
 			t.Fail()
 		}
 	} else {
