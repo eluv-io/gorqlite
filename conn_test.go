@@ -33,8 +33,9 @@ func TestConnectionStringParse(t *testing.T) {
 	requireString(t, "strong", consistencyLevelNames[conn.consistencyLevel])
 	requireString(t, "4000", conn.cluster.leader.port)
 	requireInt(t, 1, conn.timeout)
+	requireBool(t, false, conn.peerless)
 
-	if conn, err = parseUrl("http://user1:pass1@host1.foobar.com:4000/db?level=weak"); err !=nil {
+	if conn, err = parseUrl("http://user1:pass1@host1.foobar.com:4000/db?level=weak&peerless=true"); err !=nil {
 		t.Error(err)
 	}
 
@@ -46,6 +47,8 @@ func TestConnectionStringParse(t *testing.T) {
 	requireString(t, "weak", consistencyLevelNames[conn.consistencyLevel])
 	requireString(t, "4000", conn.cluster.leader.port)
 	requireInt(t, defaultTimeout, conn.timeout)
+	requireBool(t, true, conn.peerless)
+
 }
 
 func requireString(t *testing.T, expected string, actual string) {
