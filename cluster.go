@@ -168,6 +168,11 @@ func (conn *Connection) assembleURL(apiOp apiOperation, p peer) string {
 func (conn *Connection) updateClusterInfo() (err error) {
 	trace("%s: updateClusterInfo() called", conn.ID)
 
+	if conn.peerless {
+		trace("%s: peerless mode is enabled, cluster info ignored", conn.ID)
+		return nil
+	}
+
 	// start with a fresh new cluster
 	var rc rqliteCluster
 	rc.conn = conn

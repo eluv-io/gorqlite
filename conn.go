@@ -70,6 +70,7 @@ type Connection struct {
 	timeout       int    //   2
 	hasBeenClosed bool   //   false
 	ID            string //   generated in init()
+	peerless 	  bool   //   false
 }
 
 var defaultTimeout = 2
@@ -108,6 +109,11 @@ func (conn *Connection) Leader() (string, error) {
 	if conn.hasBeenClosed {
 		return "", errClosed
 	}
+
+	if conn.peerless {
+		return conn.cluster.leader.String(), nil
+	}
+
 	trace("%s: Leader(), calling updateClusterInfo()", conn.ID)
 	err := conn.updateClusterInfo()
 	if err != nil {
@@ -130,6 +136,11 @@ func (conn *Connection) Peers() ([]string, error) {
 		var ans []string
 		return ans, errClosed
 	}
+
+	if conn.peerless {
+		return []string{conn.cluster.leader.String()}, nil
+	}
+
 	plist := make([]string, 0)
 
 	trace("%s: Peers(), calling updateClusterInfo()", conn.ID)
@@ -213,6 +224,7 @@ func (conn *Connection) SetExecutionWithTransaction(state bool) error {
 		port                        "4001"
 		consistencyLevel            "weak"
 		timeout						"2"
+		peerless					"false" - only use given peer, do not maintain cluster info
 */
 
 func (conn *Connection) initConnection(url string) error {
@@ -280,6 +292,7 @@ func (conn *Connection) initConnection(url string) error {
 	conn.consistencyLevel = cl_WEAK
 	conn.timeout = defaultTimeout
 	conn.wantsTransactions = true
+	conn.peerless = false
 
 	if u.RawQuery != "" {
 		q := u.Query()
@@ -302,6 +315,10 @@ func (conn *Connection) initConnection(url string) error {
 			}
 			conn.timeout = ti
 		}
+		peerless := q.Get("peerless")
+		if mode, err := strconv.ParseBool(peerless); err == nil {
+			conn.peerless = mode
+		}
 	}
 
 	trace("%s: parseDefaultPeer() is done:", conn.ID)
@@ -317,6 +334,7 @@ func (conn *Connection) initConnection(url string) error {
 	trace("%s:    %s -> %s", conn.ID, "consistencyLevel", consistencyLevelNames[conn.consistencyLevel])
 	trace("%s:    %s -> %v", conn.ID, "wantTransaction", conn.wantsTransactions)
 	trace("%s:    %s -> %v", conn.ID, "timeout", conn.timeout)
+	trace("%s:    %s -> %v", conn.ID, "peerless", conn.peerless)
 
 	conn.cluster.conn = conn
 
