@@ -79,7 +79,7 @@ func TestInitCluster(t *testing.T) {
 	}
 }
 
-func TestFavorSeed(t *testing.T) {
+func TestFavoredSeed(t *testing.T) {
 
 	conn := Connection{ID: "testID"}
 

@@ -46,6 +46,23 @@ func (p *peer) String() string {
 	return fmt.Sprintf("%s:%s", p.hostname, p.port)
 }
 
+func indexOf(p peer, peers []peer) (int) {
+	for k, v := range peers {
+		if p == v {
+			return k
+		}
+	}
+	return -1    //not found.
+}
+
+func removeAt(peers []peer, idx int) []peer {
+	return append(peers[:idx], peers[idx+1:]...)
+}
+
+func prepend(p peer, list []peer) []peer {
+	return append([]peer{p}, list...)
+}
+
 /* *****************************************************************
 
   type: rqliteCluster
@@ -78,29 +95,21 @@ func (rc *rqliteCluster) makePeerList(favorSeed bool) []peer {
 	for _, p := range rc.otherPeers {
 		peerList = append(peerList, p)
 	}
-	if favorSeed {
+	if favorSeed && rc.seed.hostname != "" && rc.seed.port != "" {
 		trace("favoring seed peer '%s:%s'", rc.seed.hostname, rc.seed.port)
-		idx := indexOf(rc.seed, peerList)
-		if idx > 0 && rc.seed.hostname != "" && rc.seed.port != "" {
-			peerList = append(peerList[:idx], peerList[idx+1:]...)
-			peerList = append([]peer{rc.seed}, peerList...)
+		if idx := indexOf(rc.seed, peerList); idx > 0 {
+			peerList = removeAt(peerList, idx)
+			peerList = prepend(rc.seed, peerList)
 		}
 	}
 	trace("%s: makePeerList() returning this list:", rc.conn.ID)
-	for n, v := range peerList {
-		trace("%s: makePeerList() peer %d -> %s", rc.conn.ID, n, v.hostname+":"+v.port)
+	if wantsTrace {
+		for n, v := range peerList {
+			trace("%s: makePeerList() peer %d -> %s", rc.conn.ID, n, v.hostname+":"+v.port)
+		}
 	}
 
 	return peerList
-}
-
-func indexOf(p peer, peers []peer) (int) {
-	for k, v := range peers {
-		if p == v {
-			return k
-		}
-	}
-	return -1    //not found.
 }
 
 /* *****************************************************************
