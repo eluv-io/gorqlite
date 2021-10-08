@@ -126,7 +126,31 @@ func TestFavorSeed(t *testing.T) {
 	requireBool(t, true, peerList[1] == leader)
 
 	peerList = cluster.makePeerList(false)
+
 	requireBool(t, true, len(peerList) == 5)
 	requireBool(t, true, peerList[0] == leader)
 	requireBool(t, true, peerList[3] == seed)
+
+	other := leader
+	cluster = rqliteCluster{
+		conn:   &conn,
+		leader: seed,
+		seed:   seed,
+		otherPeers: []peer{
+			{hostname: "10.100.2.1", port: "4001"},
+			{hostname: "10.100.3.1", port: "4001"},
+			other,
+			{hostname: "10.100.5.1", port: "4001"},
+		},
+	}
+
+	peerList = cluster.makePeerList(true)
+	requireBool(t, true, len(peerList) == 5)
+	requireBool(t, true, peerList[0] == seed)
+	requireBool(t, true, peerList[3] == other)
+
+	peerList = cluster.makePeerList(false)
+	requireBool(t, true, len(peerList) == 5)
+	requireBool(t, true, peerList[0] == seed)
+	requireBool(t, true, peerList[3] == other)
 }

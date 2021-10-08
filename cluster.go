@@ -80,14 +80,12 @@ func (rc *rqliteCluster) makePeerList(favorSeed bool) []peer {
 	}
 	if favorSeed {
 		trace("favoring seed peer '%s:%s'", rc.seed.hostname, rc.seed.port)
-		if idx := indexOf(rc.seed, peerList); idx > 0 {
+		idx := indexOf(rc.seed, peerList)
+		if idx > 0 && rc.seed.hostname != "" && rc.seed.port != "" {
 			peerList = append(peerList[:idx], peerList[idx+1:]...)
-		}
-		if rc.seed.hostname != "" && rc.seed.port != "" {
 			peerList = append([]peer{rc.seed}, peerList...)
 		}
 	}
-
 	trace("%s: makePeerList() returning this list:", rc.conn.ID)
 	for n, v := range peerList {
 		trace("%s: makePeerList() peer %d -> %s", rc.conn.ID, n, v.hostname+":"+v.port)
