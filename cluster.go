@@ -46,6 +46,23 @@ func (p *peer) String() string {
 	return fmt.Sprintf("%s:%s", p.hostname, p.port)
 }
 
+func indexOf(p peer, peers []peer) (int) {
+	for k, v := range peers {
+		if p == v {
+			return k
+		}
+	}
+	return -1    //not found.
+}
+
+func removeAt(peers []peer, idx int) []peer {
+	return append(peers[:idx], peers[idx+1:]...)
+}
+
+func prepend(p peer, list []peer) []peer {
+	return append([]peer{p}, list...)
+}
+
 /* *****************************************************************
 
   type: rqliteCluster
@@ -55,7 +72,8 @@ func (p *peer) String() string {
  * *****************************************************************/
 
 type rqliteCluster struct {
-	leader     peer
+	seed     	peer
+	leader     	peer
 	otherPeers []peer
 	conn       *Connection
 }
@@ -70,17 +88,25 @@ type rqliteCluster struct {
 
  * *****************************************************************/
 
-func (rc *rqliteCluster) makePeerList() []peer {
+func (rc *rqliteCluster) makePeerList(favorSeed bool) []peer {
 	trace("%s: makePeerList() called", rc.conn.ID)
 	var peerList []peer
 	peerList = append(peerList, rc.leader)
 	for _, p := range rc.otherPeers {
 		peerList = append(peerList, p)
 	}
-
+	if favorSeed && rc.seed.hostname != "" && rc.seed.port != "" {
+		trace("favoring seed peer '%s:%s'", rc.seed.hostname, rc.seed.port)
+		if idx := indexOf(rc.seed, peerList); idx > 0 {
+			peerList = removeAt(peerList, idx)
+			peerList = prepend(rc.seed, peerList)
+		}
+	}
 	trace("%s: makePeerList() returning this list:", rc.conn.ID)
-	for n, v := range peerList {
-		trace("%s: makePeerList() peer %d -> %s", rc.conn.ID, n, v.hostname+":"+v.port)
+	if wantsTrace {
+		for n, v := range peerList {
+			trace("%s: makePeerList() peer %d -> %s", rc.conn.ID, n, v.hostname+":"+v.port)
+		}
 	}
 
 	return peerList
@@ -176,6 +202,9 @@ func (conn *Connection) updateClusterInfo() (err error) {
 	// start with a fresh new cluster
 	var rc rqliteCluster
 	rc.conn = conn
+
+	// maintain seed as well
+	rc.seed = conn.cluster.seed
 
 	// nodes/ API is available in 6.0+
 	trace("getting leader from /nodes")

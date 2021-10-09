@@ -288,6 +288,9 @@ func (conn *Connection) initConnection(url string) error {
 		}
 	}
 
+	// Set seed to be the first connection, which is considered the leader at this stage
+	conn.cluster.seed = conn.cluster.leader
+
 	// defaults
 	conn.consistencyLevel = cl_WEAK
 	conn.timeout = defaultTimeout

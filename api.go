@@ -41,7 +41,7 @@ func (conn *Connection) rqliteApiGet(apiOp apiOperation) ([]byte, error) {
 	}
 
 	// just to be safe, check this
-	peersToTry := conn.cluster.makePeerList()
+	peersToTry := conn.cluster.makePeerList(false)
 	if len(peersToTry) < 1 {
 		return responseBody, errors.New("I don't have any cluster info")
 	}
@@ -117,11 +117,14 @@ PeerLoop:
 func (conn *Connection) rqliteApiPost(apiOp apiOperation, sqlStatements []string) ([]byte, error) {
 	var responseBody []byte
 
+	var favorSeed bool
 	switch apiOp {
 	case api_QUERY:
 		trace("%s: rqliteApiGet() post called for a QUERY of %d statements", conn.ID, len(sqlStatements))
+		favorSeed = true
 	case api_WRITE:
 		trace("%s: rqliteApiGet() post called for a QUERY of %d statements", conn.ID, len(sqlStatements))
+		favorSeed = false
 	default:
 		return responseBody, errors.New("weird! called for an invalid apiOperation in rqliteApiPost()")
 	}
@@ -135,7 +138,7 @@ func (conn *Connection) rqliteApiPost(apiOp apiOperation, sqlStatements []string
 	}
 
 	// just to be safe, check this
-	peersToTry := conn.cluster.makePeerList()
+	peersToTry := conn.cluster.makePeerList(favorSeed)
 	if len(peersToTry) < 1 {
 		return responseBody, errors.New("I don't have any cluster info")
 	}
