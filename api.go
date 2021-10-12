@@ -166,6 +166,7 @@ PeerLoop:
 			}
 			req.Header.Set("Content-Type", "application/json")
 			client := &http.Client{}
+			client.Timeout = time.Duration(conn.timeout) * time.Second
 			response, err := client.Do(req)
 			if err != nil {
 				trace("%s: got error '%s' doing client.Do", conn.ID, err.Error())
