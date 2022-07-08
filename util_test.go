@@ -9,7 +9,7 @@ import "os"
 func testUrl() string {
 	url := os.Getenv("GORQLITE_TEST_URL")
 	if url == "" {
-		url = "http://"
+		url = "http://1.2.3.4:1234,http://localhost:4001"
 	}
 	return url
 }

@@ -74,7 +74,9 @@ type rqliteCluster struct {
 func (rc *rqliteCluster) makePeerList() []peer {
 	trace("%s: makePeerList() called", rc.conn.ID)
 	var peerList []peer
-	peerList = append(peerList, rc.leader)
+	if rc.leader.hostname != "" {
+		peerList = append(peerList, rc.leader)
+	}
 	for _, p := range rc.otherPeers {
 		peerList = append(peerList, p)
 	}
