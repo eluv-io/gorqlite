@@ -25,7 +25,9 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -83,19 +85,20 @@ func init() {
 // Open creates and initializes a gorqlite Connection, which represents various
 // config information.
 //
-// The URL should be in a form like this:
+// The URL is a comma-separated list of URLs to individual "seed" nodes of the cluster:
+//  http://frank:mySecret@host1:4001?level=strong&timeout=2,http://host2:4444,http://host3
 //
-//	http://localhost:4001
+// The first node URL may have additional settings (username, password, level, timeout)
+// and should be of the following form:
 //
-//	http://     default, no auth, localhost:4001
-//	https://    default, no auth, localhost:4001, using https
+//	http://[username:password@]localhost[:4001][?level=none|weak|strong&timeout=1]
 //
-//	http://localhost:1234
-//	http://mary:secret2@localhost:1234
-//
-//  https://mary:secret2@somewhere.example.com:1234
-//  https://mary:secret2@somewhere.example.com // will use 4001
-//
+// Defaults:
+//  port:     4001
+//  username: empty
+//  password: empty
+//  level:    weak
+//  timeout:  2 (seconds)
 func Open(connURL string, client ...*http.Client) (Connection, error) {
 	return OpenContext(context.Background(), connURL, client...)
 }
@@ -122,10 +125,30 @@ func OpenContext(ctx context.Context, connURL string, client ...*http.Client) (C
 	conn.timeout = 10
 	conn.hasBeenClosed = false
 
-	// parse the URL given
-	err = conn.initConnection(connURL)
+	urls := strings.Split(connURL, ",")
+
+	// parse the first URL for full settings (including options)
+	err = conn.initConnection(urls[0])
 	if err != nil {
 		return conn, err
+	}
+
+	// any subsequent URLs are used as additional peers
+	for _, peerUrl := range urls[1:] {
+		pu, err := url.Parse(peerUrl)
+		if err != nil {
+			return conn, err
+		}
+		var other peer
+		h, p, err := net.SplitHostPort(pu.Host)
+		if err != nil {
+			other.hostname = pu.Host
+			other.port = "4001"
+		} else {
+			other.hostname = h
+			other.port = p
+		}
+		conn.cluster.otherPeers = append(conn.cluster.otherPeers, other)
 	}
 
 	// call updateClusterInfo() to populate the cluster
