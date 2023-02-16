@@ -1,6 +1,7 @@
 package gorqlite
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -148,7 +149,9 @@ func (conn *Connection) query(ctx context.Context, sqlStatements []byte) (result
 
 	// if we get an error Unmarshaling, that's a showstopper
 	var sections map[string]interface{}
-	err = json.Unmarshal(response, &sections)
+	dec := json.NewDecoder(bytes.NewReader(response))
+	dec.UseNumber()
+	err = dec.Decode(&sections)
 	if err != nil {
 		trace("%s: json.Unmarshal() ERROR: %s", conn.ID, err.Error())
 		var errResult QueryResult
@@ -187,7 +190,7 @@ func (conn *Connection) query(ctx context.Context, sqlStatements []byte) (result
 		// time is a float64 (could be nil)
 		_, ok = thisResult["time"]
 		if ok {
-			thisQR.Timing = thisResult["time"].(float64)
+			thisQR.Timing = decodeNumber(thisResult["time"]).(float64)
 		}
 
 		// column & type are an array of strings
@@ -200,7 +203,17 @@ func (conn *Connection) query(ctx context.Context, sqlStatements []byte) (result
 
 		// and values are an array of arrays
 		if thisResult["values"] != nil {
-			thisQR.values = thisResult["values"].([]interface{})
+			values := thisResult["values"].([]interface{})
+			for i, v := range values {
+				switch vs := v.(type) {
+				case []interface{}:
+					for j, n := range vs {
+						vs[j] = decodeNumber(n)
+					}
+					values[i] = vs
+				}
+			}
+			thisQR.values = values
 		} else {
 			trace("%s: fyi, no values this query", conn.ID)
 		}
@@ -220,6 +233,28 @@ func (conn *Connection) query(ctx context.Context, sqlStatements []byte) (result
 	}
 }
 
+func decodeNumber(x interface{}) interface{} {
+	var nb json.Number
+
+	switch ret := x.(type) {
+	case int64:
+		return ret
+	case float64:
+		return ret
+	case json.Number:
+		// handled below
+		nb = ret
+	default:
+		return x
+	}
+	i64, err := nb.Int64()
+	if err == nil {
+		return i64
+	}
+	f64, _ := nb.Float64()
+	return f64
+}
+
 /* *****************************************************************
 
    type: QueryResult
@@ -231,7 +266,7 @@ A QueryResult type holds the results of a call to Query().  You could think of i
 
 So if you were to query:
 
-  SELECT id, name FROM some_table;
+	SELECT id, name FROM some_table;
 
 then a QueryResult would hold any errors from that query, a list of columns and types, and the actual row values.
 
@@ -392,6 +427,7 @@ Scan takes a list of pointers and then updates them to reflect the current row's
 
 Note that only the following data types are used, and they
 are a subset of the types JSON uses:
+
 	time: conversion to time occurs depending on the type of source
 		string:
 			- parse with layout = "2006-01-02 15:04:05"
@@ -478,7 +514,20 @@ func (qr *QueryResult) Scan(dest ...interface{}) error {
 				return fmt.Errorf("invalid int64 col:%d type:%T val:%v", n, src, src)
 			}
 		case *float64:
-			*d.(*float64) = float64(src.(float64))
+			switch src := src.(type) {
+			case float64:
+				*d.(*float64) = src
+			case int64:
+				*d.(*float64) = float64(src)
+			case string:
+				f, err := strconv.ParseFloat(src, 64)
+				if err != nil {
+					return err
+				}
+				*d.(*float64) = f
+			default:
+				return fmt.Errorf("invalid float64 col:%d type:%T val:%v", n, src, src)
+			}
 		case *string:
 			switch src := src.(type) {
 			case string:
