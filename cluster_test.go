@@ -2,7 +2,6 @@ package gorqlite
 
 import (
 	"context"
-	"os"
 	"testing"
 )
 
@@ -36,21 +35,21 @@ func TestProcessInfoResponse(t *testing.T) {
 	if err != nil || len(rc.otherPeers) == 0 {
 		t.Fatal(err)
 	}
-	if rc.leader.hostname != "host3" || rc.leader.port != "4003" {
-		t.Errorf("leader should be host3:4003, got %s:%s", rc.leader.hostname, rc.leader.port)
+	if rc.leader != "host3:4003" {
+		t.Errorf("leader should be host3:4003, got %s", rc.leader)
 	}
 	if len(rc.otherPeers) != 1 {
 		t.Errorf("expected 1 peer, got %d", len(rc.otherPeers))
 	}
 	p := rc.otherPeers[0]
-	if p.hostname != "host1" || p.port != "4001" {
-		t.Errorf("peer should be host1:4001, got %s:%s", p.hostname, p.port)
+	if p != "host1:4001" {
+		t.Errorf("peer should be host1:4001, got %s", p)
 	}
 }
 
 func TestInitCluster(t *testing.T) {
 
-	TraceOn(os.Stderr)
+	//TraceOn(os.Stderr)
 	t.Logf("trying Open: %s\n", testUrl())
 	conn, err := Open(testUrl())
 	if err != nil {
@@ -78,5 +77,28 @@ func TestInitCluster(t *testing.T) {
 	if len(p) < 1 {
 		t.Logf("--> FAILED")
 		t.Fail()
+	}
+
+}
+
+func TestLeader(t *testing.T) {
+	leaders, err := globalConnection.Leader(context.Background())
+	if err != nil {
+		t.Errorf("failed to get leader: %v", err.Error())
+	}
+
+	if len(leaders) < 1 {
+		t.Errorf("expected leaders to be at least 1, got %d", len(leaders))
+	}
+}
+
+func TestPeers(t *testing.T) {
+	peers, err := globalConnection.Peers(context.Background())
+	if err != nil {
+		t.Errorf("failed to get peers: %v", err.Error())
+	}
+
+	if len(peers) < 1 {
+		t.Errorf("expected peers to be at least 1, got %d", len(peers))
 	}
 }

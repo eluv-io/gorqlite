@@ -3,13 +3,13 @@
 
 gorqlite is a golang client for rqlite that provides easy-to-use abstractions for working with the rqlite API.
 
-It is not a database/sql driver (read below for why this is impossible) but instead provides similar semantics, such as `Open()`, `Query()` and `QueryOne()`, `Next()`/`Scan()`/`Map()`, `Write()` and `WriteOne()`, etc.
+It is not a database/sql driver (read below for why this is difficult at the present time) but instead provides similar semantics, such as `Open()`, `Query()` and `QueryOne()`, `Next()`/`Scan()`/`Map()`, `Write()` and `WriteOne()`, etc.
 
-rqlite is the distributed consistent sqlite database.  [Learn more about rqlite here](https://github.com/rqlite/rqlite).
+rqlite is the distributed consistent sqlite database.  [Learn more about rqlite here](https://www.rqlite.io).
 
 ## Status
 
-gorqlite should be considered alpha until more testers share their experiences.  See TODO below.
+This client library is used in production by various groups, including Replicated. Check out [their blog post](https://www.replicated.com/blog/app-manager-with-rqlite) on their use of rqlite.
 
 This fork of gorlqite supports rqlite 6.x and later.
 
@@ -21,6 +21,7 @@ This fork of gorlqite supports rqlite 6.x and later.
 * Timeout can be set on a per-Connection basis to accommodate those with far-flung empires.
 * Use familiar database URL connection strings to connection, optionally including rqlite authentication and/or specific rqlite consistency levels.
 * Only a single node needs to be specified in the connection.  gorqlite will talk to it and figure out the rest of the cluster from its redirects and status API.
+* When cluster discovery is disabled, only the provided URL will be used to communicate with the API instead of discovering the leader and peers and retrying failed requests with different peers. This is helpful when using a Kubernetes service to handle the load balancing of the requests across healthy nodes.
 * Support for several rqlite-specific operations:
   * `Leader()` and `Peers()` to examine the cluster.
   * `SetConsistencyLevel()` can be called at any time on a connection to change the consistency level for future operations.
@@ -54,15 +55,13 @@ conn, err := gorqlite.Open("https://mary:secret2@server1.example.com:4001/?level
 conn, err := gorliqte.Open("https://server2.example.com:4001/?level=weak")
 // different port, setting the rqlite consistency level and timeout
 conn, err := gorqlite.Open("https://localhost:2265/?level=strong&timeout=30")
+// different port, disabling cluster discovery in the client
+conn, err := gorqlite.Open("https://localhost:2265/?disableClusterDiscovery=true")
 
 // change our minds
 conn.SetConsistencyLevel("none")
 conn.SetConsistencyLevel("weak")
 conn.SetConsistencyLevel("strong")
-
-// set the http timeout.  Note that rqlite has various internal timeouts, but this
-// timeout applies to the http.Client and its work.  It is measured in seconds.
-conn.SetTimeout(10)
 
 // simulate database/sql Prepare()
 statements := make ([]string,0)
@@ -96,9 +95,9 @@ var name string
 rows, err := conn.QueryOne("select id, name from secret_agents where id > 500")
 fmt.Printf("query returned %d rows\n",rows.NumRows)
 for rows.Next() {
-	err := response.Scan(&id, &name)
-	fmt.Printf("this is row number %d\n",response.RowNumber)
-	fmt.Printf("there are %d rows overall%d\n",response.NumRows)
+	err := rows.Scan(&id, &name)
+	fmt.Printf("this is row number %d\n",rows.RowNumber)
+	fmt.Printf("there are %d rows overall%d\n",rows.NumRows)
 }
 
 // just like WriteOne()/Write(), QueryOne() takes a single statement,
@@ -109,7 +108,7 @@ for rows.Next() {
 // alternatively, use Next()/Map()
 
 for rows.Next() {
-	m, err := response.Map()
+	m, err := rows.Map()
 	// m is now a map[column name as string]interface{}
 	id := m["name"].(float64) // the only json number type
 	name := m["name"].(string)
@@ -138,7 +137,77 @@ gorqlite.TraceOn(os.Stderr)
 
 // turn off
 gorqlite.TraceOff()
+
+// using parameterized statements
+wr, err := conn.WriteParameterized(
+	[]gorqlite.ParameterizedStatement{
+		{
+			Query:     "INSERT INTO secret_agents(id, name, secret) VALUES(?, ?, ?)",
+			Arguments: []interface{}{7, "James Bond", "not-a-secret"},
+		},
+	},
+)
+seq, err := conn.QueueParameterized(
+	[]gorqlite.ParameterizedStatement{
+		{
+			Query:     "INSERT INTO secret_agents(id, name, secret) VALUES(?, ?, ?)",
+			Arguments: []interface{}{7, "James Bond", "not-a-secret"},
+		},
+	},
+)
+qr, err := conn.QueryParameterized(
+	[]gorqlite.ParameterizedStatement{
+		{
+			Query:     "SELECT id, name from secret_agents where id > ?",
+			Arguments: []interface{}{3},
+		},
+	},
+)
+
+// alternatively
+wr, err := conn.WriteOneParameterized(
+	gorqlite.ParameterizedStatement{
+		Query:     "INSERT INTO secret_agents(id, name, secret) VALUES(?, ?, ?)",
+		Arguments: []interface{}{7, "James Bond", "not-a-secret"},
+	},
+)
+seq, err := conn.QueueOneParameterized(
+	gorqlite.ParameterizedStatement{
+		Query:     "INSERT INTO secret_agents(id, name, secret) VALUES(?, ?, ?)",
+		Arguments: []interface{}{7, "James Bond", "not-a-secret"},
+	},
+)
+qr, err := conn.QueryOneParameterized(
+	gorqlite.ParameterizedStatement{
+		Query:     "SELECT id, name from secret_agents where id > ?",
+		Arguments: []interface{}{3},
+	},
+)
+
+// using nullable types
+var name gorqlite.NullString
+rows, err := conn.QueryOne("select name from secret_agents where id = 7")
+for rows.Next() {
+	err := rows.Scan(&name)
+}
+if name.Valid {
+	// use name.String
+} else {
+	// NULL value
+}
+
 ```
+
+### Queued Writes
+The client does support [Queued Writes](https://github.com/rqlite/rqlite/blob/master/DOC/QUEUED_WRITES.md). Instead of calling the `Write()` functions, call the queueing versions instead.
+```go
+var seq int64
+var err error
+
+seq, err = conn.QueueOne("CREATE TABLE " + testTableName() + " (id integer, name text)")
+seq, err = conn.Queue(...)
+```
+
 ## Important Notes
 
 If you use access control, any user connecting will need the "status" permission in addition to any other needed permission.  This is so gorqlite can query the cluster and try other peers if the master is lost.
