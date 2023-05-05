@@ -167,7 +167,7 @@ func OpenContext(ctx context.Context, connURL string, client ...*http.Client) (*
 // Premature optimization is the root of all evil, so this is
 // probably sinful behavior.
 //
-// Don't put a \n in your Sprintf pattern becuase trace() adds one
+// Don't put a \n in your Sprintf pattern because trace() adds one
 func trace(pattern string, args ...interface{}) {
 	// don't do the probably expensive Sprintf() if not needed
 	if !wantsTrace {
