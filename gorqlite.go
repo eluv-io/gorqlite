@@ -55,7 +55,8 @@ const (
 )
 
 func init() {
-	traceOut = io.Discard
+	Discard = &DiscardTracer{}
+	tracer = Discard
 
 	consistencyLevelNames = make(map[consistencyLevel]string)
 	consistencyLevelNames[ConsistencyLevelNone] = "none"
@@ -170,18 +171,7 @@ func OpenContext(ctx context.Context, connURL string, client ...*http.Client) (*
 // Don't put a \n in your Sprintf pattern because trace() adds one
 func trace(pattern string, args ...interface{}) {
 	// don't do the probably expensive Sprintf() if not needed
-	if !wantsTrace {
-		return
-	}
-
-	// this could all be made into one long statement but we have
-	// compilers to do such things for us. let's sip a mint julep
-	// and spell this out in glorious exposition.
-
-	// make sure there is one and only one newline
-	nlPattern := strings.TrimSpace(pattern) + "\n"
-	msg := fmt.Sprintf(nlPattern, args...)
-	_, _ = traceOut.Write([]byte(msg))
+	tracer.Tracef(pattern, args...)
 }
 
 // TraceOn turns on tracing output to the io.Writer of your choice.
@@ -191,15 +181,37 @@ func trace(pattern string, args ...interface{}) {
 // Normally, you should run with tracing off, as it makes absolutely
 // no concession to performance and is intended for debugging/dev use.
 func TraceOn(w io.Writer) {
-	traceOut = w
-	wantsTrace = true
+	tracer = &traceWriter{out: w}
+}
+
+// WithTracer turns on tracing output to the given Tracer.
+func WithTracer(t Tracer) {
+	tracer = t
 }
 
 // TraceOff turns off tracing output. Once you call TraceOff(), no further
 // info is sent to the io.Writer, unless it is TraceOn'd again.
 func TraceOff() {
-	wantsTrace = false
-	traceOut = io.Discard
+	tracer = Discard
 }
 
-var _ = TraceOff
+type Tracer interface {
+	Tracef(pattern string, args ...interface{})
+}
+
+var Discard *DiscardTracer
+
+type DiscardTracer struct{}
+
+func (d *DiscardTracer) Tracef(string, ...interface{}) {}
+
+type traceWriter struct {
+	out io.Writer
+}
+
+func (t *traceWriter) Tracef(pattern string, args ...interface{}) {
+	// make sure there is one and only one newline
+	nlPattern := strings.TrimSpace(pattern) + "\n"
+	msg := fmt.Sprintf(nlPattern, args...)
+	_, _ = t.out.Write([]byte(msg))
+}

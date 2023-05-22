@@ -41,7 +41,7 @@ func (conn *Connection) rqliteApiCall(ctx context.Context, apiOp apiOperation, m
 	var failureLog []string
 
 	for i, peer := range peers {
-		trace("%s: attempting to contact peer %d", conn.ID, i)
+		trace("%s: attempting to contact peer %d (%s)", conn.ID, i, peer)
 		surl := conn.assembleURL(apiOp, peer)
 
 		// Prepare request

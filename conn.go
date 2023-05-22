@@ -14,7 +14,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	nurl "net/url"
 	"strconv"
@@ -30,13 +29,8 @@ const (
 var (
 	// ErrClosed indicates that client connection was closed
 	ErrClosed = errors.New("gorqlite: connection is closed")
-	traceOut  io.Writer
+	tracer    Tracer
 )
-
-// defaults to false.  This is used in trace() to quickly
-// return if tracing is off, so that we don't do a perhaps
-// expensive Sprintf() call only to send it to Discard
-var wantsTrace bool
 
 /* *****************************************************************
 
