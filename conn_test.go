@@ -72,21 +72,21 @@ func TestSetConsistencyLevel(t *testing.T) {
 	}
 
 	t.Run("Less than none", func(t *testing.T) {
-		err := conn.SetConsistencyLevel(-1)
+		err := conn.SetConsistency(-1)
 		if err == nil {
 			t.Errorf("expected error, got nil")
 		}
 	})
 
 	t.Run("Greater than strong", func(t *testing.T) {
-		err := conn.SetConsistencyLevel(100)
+		err := conn.SetConsistency(100)
 		if err == nil {
 			t.Errorf("expected error, got nil")
 		}
 	})
 
 	t.Run("None", func(t *testing.T) {
-		err := conn.SetConsistencyLevel(ConsistencyLevelNone)
+		err := conn.SetConsistency(ConsistencyLevelNone)
 		if err != nil {
 			t.Errorf("expected nil, got %v", err)
 		}
