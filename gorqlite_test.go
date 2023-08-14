@@ -18,7 +18,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("opening connection: %v", err)
 	}
 
-	err = conn.SetConsistencyLevel(ConsistencyLevelStrong)
+	err = conn.SetConsistency(ConsistencyLevelStrong)
 	if err != nil {
 		log.Fatalf("setting consistency level: %v", err)
 	}

@@ -213,45 +213,38 @@ func (conn *Connection) QueryParameterizedContext(ctx context.Context, sqlStatem
 	results = make([]QueryResult, 0)
 
 	if conn.hasBeenClosed {
-		var errResult QueryResult
-		errResult.Err = ErrClosed
-		results = append(results, errResult)
+		results = append(results, QueryResult{Err: ErrClosed})
 		return results, ErrClosed
 	}
 
 	trace("%s: Query() for %d statements", conn.ID, len(sqlStatements))
 
-	// if we get an error POSTing, that's a showstopper
+	// stop we get an error POSTing
 	response, err := conn.rqliteApiPost(ctx, api_QUERY, sqlStatements)
 	if err != nil {
 		trace("%s: rqliteApiCall() ERROR: %s", conn.ID, err.Error())
-		var errResult QueryResult
-		errResult.Err = err
-		results = append(results, errResult)
+		results = append(results, QueryResult{Err: err})
 		return results, err
 	}
 	trace("%s: rqliteApiCall() OK", conn.ID)
 
-	// if we get an error Unmarshaling, that's a showstopper
+	// stop if we get an error Unmarshalling
 	var sections map[string]interface{}
 	dec := json.NewDecoder(bytes.NewReader(response))
 	dec.UseNumber()
 	err = dec.Decode(&sections)
 	if err != nil {
 		trace("%s: json.Unmarshal() ERROR: %s", conn.ID, err.Error())
-		var errResult QueryResult
-		errResult.Err = err
-		results = append(results, errResult)
+		results = append(results, QueryResult{Err: err})
 		return results, err
 	}
 
 	// if we got an error from the api, that's a showstopper
 	if errMsg, ok := sections["error"].(string); ok && errMsg != "" {
 		trace("%s: api ERROR: %s", conn.ID, errMsg)
-		var errResult QueryResult
-		errResult.Err = fmt.Errorf("%s", errMsg)
-		results = append(results, errResult)
-		return results, errResult.Err
+		err = fmt.Errorf("%s", errMsg)
+		results = append(results, QueryResult{Err: err})
+		return results, err
 	}
 
 	// at this point, we have a "results" section and
@@ -263,66 +256,71 @@ func (conn *Connection) QueryParameterizedContext(ctx context.Context, sqlStatem
 	numStatementErrors := 0
 	for n, r := range resultsArray {
 		trace("%s: parsing result %d", conn.ID, n)
-		var thisQR QueryResult
-		thisQR.conn = conn
 
 		// r is a hash with columns, types, values, and time
-		thisResult := r.(map[string]interface{})
-
-		// did we get an error?
-		_, ok := thisResult["error"]
-		if ok {
-			trace("%s: have an error on this result: %s", conn.ID, thisResult["error"].(string))
-			thisQR.Err = errors.New(thisResult["error"].(string))
-			results = append(results, thisQR)
+		thisQR := conn.makeQueryResult(r.(map[string]interface{}))
+		if thisQR.Err != nil {
 			numStatementErrors++
-			continue
-		}
-
-		// time is a float64 (could be nil)
-		_, ok = thisResult["time"]
-		if ok {
-			thisQR.Timing = decodeNumber(thisResult["time"]).(float64)
-		}
-
-		// column & type are an array of strings
-		c := thisResult["columns"].([]interface{})
-		t := thisResult["types"].([]interface{})
-		for i := 0; i < len(c); i++ {
-			thisQR.columns = append(thisQR.columns, c[i].(string))
-			thisQR.types = append(thisQR.types, t[i].(string))
-		}
-
-		// and values are an array of arrays
-		if thisResult["values"] != nil {
-			values := thisResult["values"].([]interface{})
-			for i, v := range values {
-				switch vs := v.(type) {
-				case []interface{}:
-					for j, n := range vs {
-						vs[j] = decodeNumber(n)
-					}
-					values[i] = vs
-				}
-			}
-			thisQR.values = values
 		} else {
-			trace("%s: fyi, no values this query", conn.ID)
+			trace("%s: this result (#col,time) %d %f", conn.ID, len(thisQR.columns), thisQR.Timing)
 		}
-
-		thisQR.rowNumber = -1
-
-		trace("%s: this result (#col,time) %d %f", conn.ID, len(thisQR.columns), thisQR.Timing)
 		results = append(results, thisQR)
 	}
 
 	trace("%s: finished parsing, returning %d results", conn.ID, len(results))
-
 	if numStatementErrors > 0 {
 		return results, fmt.Errorf("there were %d statement errors", numStatementErrors)
 	}
 
 	return results, nil
+}
+
+func (conn *Connection) makeQueryResult(thisResult map[string]interface{}) QueryResult {
+	thisQR := QueryResult{
+		ID: conn.ID,
+	}
+
+	// did we get an error?
+	_, ok := thisResult["error"]
+	if ok {
+		trace("%s: have an error on this result: %s", conn.ID, thisResult["error"].(string))
+		thisQR.Err = errors.New(thisResult["error"].(string))
+		return thisQR
+	}
+
+	// time is a float64 (could be nil)
+	_, ok = thisResult["time"]
+	if ok {
+		thisQR.Timing = decodeNumber(thisResult["time"]).(float64)
+	}
+
+	// column & type are an array of strings
+	c := thisResult["columns"].([]interface{})
+	t := thisResult["types"].([]interface{})
+	for i := 0; i < len(c); i++ {
+		thisQR.columns = append(thisQR.columns, c[i].(string))
+		thisQR.types = append(thisQR.types, t[i].(string))
+	}
+
+	// and values are an array of arrays
+	if thisResult["values"] != nil {
+		values := thisResult["values"].([]interface{})
+		for i, v := range values {
+			switch vs := v.(type) {
+			case []interface{}:
+				for j, n := range vs {
+					vs[j] = decodeNumber(n)
+				}
+				values[i] = vs
+			}
+		}
+		thisQR.values = values
+	} else {
+		trace("%s: fyi, no values this query", conn.ID)
+	}
+
+	thisQR.rowNumber = -1
+	return thisQR
 }
 
 func decodeNumber(x interface{}) interface{} {
@@ -363,13 +361,19 @@ func decodeNumber(x interface{}) interface{} {
 //
 // Query() returns an array of QueryResult vars, while QueryOne() returns a single variable.
 type QueryResult struct {
-	conn      *Connection
+	ID        string
 	Err       error
 	columns   []string
 	types     []string
 	Timing    float64
 	values    []interface{}
 	rowNumber int64
+}
+
+func (qr *QueryResult) IsZero() bool {
+	return qr.Err == nil &&
+		len(qr.columns) == 0 && len(qr.types) == 0 &&
+		qr.Timing == 0 && len(qr.values) == 0 && qr.rowNumber == 0
 }
 
 // these are done as getters rather than as public
@@ -400,7 +404,7 @@ func (qr *QueryResult) Columns() []string {
 //
 // Note that only json values are supported, so you will need to type the interface{} accordingly.
 func (qr *QueryResult) Map() (map[string]interface{}, error) {
-	trace("%s: Map() called for row %d", qr.conn.ID, qr.rowNumber)
+	trace("%s: Map() called for row %d", qr.ID, qr.rowNumber)
 	ans := make(map[string]interface{})
 
 	if qr.rowNumber == -1 {
@@ -524,7 +528,7 @@ func toTime(src interface{}) (time.Time, error) {
 //
 // JSON arrays, and JSON objects are not supported since sqlite does not support them.
 func (qr *QueryResult) Scan(dest ...interface{}) error {
-	trace("%s: Scan() called for %d vars", qr.conn.ID, len(dest))
+	trace("%s: Scan() called for %d vars", qr.ID, len(dest))
 
 	if qr.rowNumber == -1 {
 		return errors.New("you need to Next() before you Scan(), sorry, it's complicated")
@@ -538,7 +542,7 @@ func (qr *QueryResult) Scan(dest ...interface{}) error {
 	for n, d := range dest {
 		src := thisRowValues[n]
 		if src == nil {
-			trace("%s: skipping nil scan data for variable #%d (%s)", qr.conn.ID, n, qr.columns[n])
+			trace("%s: skipping nil scan data for variable #%d (%s)", qr.ID, n, qr.columns[n])
 			continue
 		}
 		switch d := d.(type) {
@@ -564,7 +568,7 @@ func (qr *QueryResult) Scan(dest ...interface{}) error {
 				}
 				*d = i
 			case nil:
-				trace("%s: skipping nil scan data for variable #%d (%s)", qr.conn.ID, n, qr.columns[n])
+				trace("%s: skipping nil scan data for variable #%d (%s)", qr.ID, n, qr.columns[n])
 			default:
 				return fmt.Errorf("invalid int col:%d type:%T val:%v", n, src, src)
 			}
@@ -581,7 +585,7 @@ func (qr *QueryResult) Scan(dest ...interface{}) error {
 				}
 				*d = i
 			case nil:
-				trace("%s: skipping nil scan data for variable #%d (%s)", qr.conn.ID, n, qr.columns[n])
+				trace("%s: skipping nil scan data for variable #%d (%s)", qr.ID, n, qr.columns[n])
 			default:
 				return fmt.Errorf("invalid int64 col:%d type:%T val:%v", n, src, src)
 			}
@@ -598,7 +602,7 @@ func (qr *QueryResult) Scan(dest ...interface{}) error {
 				}
 				*d = f
 			case nil:
-				trace("%s: skipping nil scan data for variable #%d (%s)", qr.conn.ID, n, qr.columns[n])
+				trace("%s: skipping nil scan data for variable #%d (%s)", qr.ID, n, qr.columns[n])
 			default:
 				return fmt.Errorf("invalid float64 col:%d type:%T val:%v", n, src, src)
 			}
@@ -607,7 +611,7 @@ func (qr *QueryResult) Scan(dest ...interface{}) error {
 			case string:
 				*d = src
 			case nil:
-				trace("%s: skipping nil scan data for variable #%d (%s)", qr.conn.ID, n, qr.columns[n])
+				trace("%s: skipping nil scan data for variable #%d (%s)", qr.ID, n, qr.columns[n])
 			default:
 				return fmt.Errorf("invalid string col:%d type:%T val:%v", n, src, src)
 			}
@@ -639,7 +643,7 @@ func (qr *QueryResult) Scan(dest ...interface{}) error {
 				}
 				*d = b
 			case nil:
-				trace("%s: skipping nil scan data for variable #%d (%s)", qr.conn.ID, n, qr.columns[n])
+				trace("%s: skipping nil scan data for variable #%d (%s)", qr.ID, n, qr.columns[n])
 			default:
 				return fmt.Errorf("invalid bool col:%d type:%T val:%v", n, src, src)
 			}

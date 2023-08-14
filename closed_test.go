@@ -49,7 +49,7 @@ func TestClosedConnection(t *testing.T) {
 	})
 
 	t.Run("SetConsistencyLevel", func(t *testing.T) {
-		err := conn.SetConsistencyLevel(ConsistencyLevelNone)
+		err := conn.SetConsistency(ConsistencyLevelNone)
 		if err == nil {
 			t.Errorf("expected error, got nil")
 		}
